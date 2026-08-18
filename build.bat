@@ -30,7 +30,7 @@ echo      Repo: C:\PROJECTS\switch\switch-cfw\atmosphere-libs
 echo      Jobs: %JOBS%
 echo ============================================
 echo.
-echo   1) Build nx_release        (release, normal build)
+echo   1) Build nx_release        (release build, also packages ../_ZIPS_/atmosphere-libs-release.zip)
 echo   2) Build nx_debug          (debug build)
 echo   3) Build nx_audit          (audit build)
 echo   4) Dry run                 (shows what would be rebuilt, no compile)
