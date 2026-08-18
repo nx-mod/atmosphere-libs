@@ -35,6 +35,25 @@ STATUS=$?
 if [ $STATUS -eq 0 ] && [ -z "$DRYRUN" ]; then
     echo "== Build ok. libstratosphere.a in lib/nintendo_nx_arm64_armv8a/release/ =="
     ls -la lib/nintendo_nx_arm64_armv8a/release/ 2>/dev/null
+
+    # Package a drag-and-drop release zip: the zip's own top level exactly
+    # mirrors this project's own layout (no wrapper folder), so extracting
+    # it directly onto a fresh atmosphere-libs checkout drops the binary in
+    # the exact spot the build would have put it. Only for nx_release --
+    # see PACKAGING.md at the switch-cfw root for the convention this
+    # follows across every project.
+    if [ "$TARGET" = "nx_release" ]; then
+        ZIPS_DIR="$SCRIPT_DIR/../_ZIPS_"
+        PKG="$SCRIPT_DIR/.release-pkg"
+        rm -rf "$PKG"
+        mkdir -p "$PKG/libstratosphere/lib/nintendo_nx_arm64_armv8a/release"
+        cp lib/nintendo_nx_arm64_armv8a/release/libstratosphere.a \
+           "$PKG/libstratosphere/lib/nintendo_nx_arm64_armv8a/release/"
+        mkdir -p "$ZIPS_DIR"
+        ( cd "$PKG" && zip -r -X "$ZIPS_DIR/atmosphere-libs-release.zip" libstratosphere/ >/dev/null )
+        rm -rf "$PKG"
+        echo "== Packaged: $ZIPS_DIR/atmosphere-libs-release.zip =="
+    fi
 fi
 
 exit $STATUS
