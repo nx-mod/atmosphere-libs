@@ -58,6 +58,7 @@ namespace ams::sf::cmif {
         public:
             virtual Result ReserveIds(DomainObjectId *out_ids, size_t count) = 0;
             virtual void   ReserveSpecificIds(const DomainObjectId *ids, size_t count) = 0;
+            virtual bool   TryRegisterMirroredObject(DomainObjectId id, ServiceObjectHolder &&obj) = 0;
             virtual void   UnreserveIds(const DomainObjectId *ids, size_t count) = 0;
             virtual void   RegisterObject(DomainObjectId id, ServiceObjectHolder &&obj) = 0;
 

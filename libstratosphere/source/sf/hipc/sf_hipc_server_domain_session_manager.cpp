@@ -84,12 +84,18 @@ namespace ams::sf::hipc {
                         AMS_ABORT_UNLESS(util::GetReference(m_session->m_forward_service)->own_handle);
                         R_TRY(serviceConvertToDomain(util::GetReference(m_session->m_forward_service).get()));
 
-                        /* The object ID reservation cannot fail here, as that would cause desynchronization from target domain. */
+                        /* Mirror the target's object id locally. Ids are domain-scoped
+                           (see sf_cmif_domain_manager.cpp), so ids assigned by other
+                           forward sessions can never collide with this one. Registration
+                           can still fail on true desync or entry exhaustion; in that case
+                           fall back to not registering our object for this session -
+                           dispatch then finds no local object and forwards every request
+                           verbatim to the target (see ProcessMessageForMitmImpl), so the
+                           client gets a functional, just unintercepted, session. */
                         object_id = cmif::DomainObjectId{util::GetReference(m_session->m_forward_service)->object_id};
-                        domain->ReserveSpecificIds(std::addressof(object_id), 1);
-
-                        /* Register the object. */
-                        domain->RegisterObject(object_id, std::move(m_session->m_srv_obj_holder));
+                        if (!domain->TryRegisterMirroredObject(object_id, std::move(m_session->m_srv_obj_holder))) {
+                            m_session->m_srv_obj_holder = cmif::ServiceObjectHolder();
+                        }
 
                         /* Set the new object holder. */
                         m_session->m_srv_obj_holder = cmif::ServiceObjectHolder(std::move(cmif_domain));

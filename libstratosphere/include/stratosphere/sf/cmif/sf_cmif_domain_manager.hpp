@@ -35,9 +35,16 @@ namespace ams::sf::cmif {
                 util::IntrusiveListNode free_list_node;
                 util::IntrusiveListNode domain_list_node;
                 Domain *owner;
+                /* The id this entry answers to, scoped to its domain. Ids are
+                   only meaningful within one domain: a mitm domain mirrors the
+                   target server's per-session ids, so the same value can
+                   legitimately be live in several domains at once. Entries are
+                   therefore looked up by scanning the owning domain's lists,
+                   never by a manager-global index. */
+                DomainObjectId id;
                 ServiceObjectHolder object;
 
-                explicit Entry() : owner(nullptr) { /* ... */ }
+                explicit Entry() : owner(nullptr), id(InvalidDomainObjectId) { /* ... */ }
             };
 
             class Domain final : public DomainServiceObject, private sf::impl::ServiceObjectImplBase2 {
@@ -48,6 +55,12 @@ namespace ams::sf::cmif {
                 private:
                     ServerDomainManager *m_manager;
                     EntryList m_entries;
+                    /* Entries with an id assigned (ReserveIds/ReserveSpecificIds)
+                       that have not been registered yet. */
+                    EntryList m_reserved;
+                private:
+                    /* Requires m_manager->m_entry_owner_lock held. */
+                    Entry *FindEntryLocked(DomainObjectId id);
                 public:
                     explicit Domain(ServerDomainManager *m) : m_manager(m) { /* ... */ }
                     ~Domain();
@@ -70,6 +83,7 @@ namespace ams::sf::cmif {
 
                     virtual Result ReserveIds(DomainObjectId *out_ids, size_t count) override final;
                     virtual void   ReserveSpecificIds(const DomainObjectId *ids, size_t count) override final;
+                    virtual bool   TryRegisterMirroredObject(DomainObjectId id, ServiceObjectHolder &&obj) override final;
                     virtual void   UnreserveIds(const DomainObjectId *ids, size_t count) override final;
                     virtual void   RegisterObject(DomainObjectId id, ServiceObjectHolder &&obj) override final;
 
@@ -94,33 +108,19 @@ namespace ams::sf::cmif {
                     Entry *AllocateEntry();
                     void   FreeEntry(Entry *);
 
-                    void AllocateSpecificEntries(const DomainObjectId *ids, size_t count);
-
-                    inline DomainObjectId GetId(Entry *e) {
-                        const size_t index = e - m_entries;
-                        AMS_ABORT_UNLESS(index < m_num_entries);
-                        return DomainObjectId{ u32(index + 1) };
-                    }
-
-                    inline Entry *GetEntry(DomainObjectId id) {
-                        if (id == InvalidDomainObjectId) {
-                            return nullptr;
-                        }
-                        const size_t index = id.value - 1;
-                        if (!(index < m_num_entries)) {
-                            return nullptr;
-                        }
-                        return m_entries + index;
-                    }
             };
         private:
             os::SdkMutex m_entry_owner_lock;
             EntryManager m_entry_manager;
+            /* Source of generated (non-mirrored) object ids. Guarded by
+               m_entry_owner_lock. Monotonic, so a generated id can never
+               accidentally equal another generated id in any domain. */
+            u32 m_next_object_id;
         private:
             virtual void *AllocateDomain()   = 0;
             virtual void  FreeDomain(void *) = 0;
         protected:
-            ServerDomainManager(DomainEntryStorage *entry_storage, size_t entry_count) : m_entry_owner_lock(), m_entry_manager(entry_storage, entry_count) { /* ... */ }
+            ServerDomainManager(DomainEntryStorage *entry_storage, size_t entry_count) : m_entry_owner_lock(), m_entry_manager(entry_storage, entry_count), m_next_object_id(1) { /* ... */ }
 
             inline DomainServiceObject *AllocateDomainServiceObject() {
                 void *storage = this->AllocateDomain();
